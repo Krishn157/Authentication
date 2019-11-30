@@ -4,7 +4,10 @@ var express=require("express"),
      mongoose= require("mongoose"),
      session = require("express-session"),
      passport = require("passport"),
-     passportLocalMongoose = require("passport-local-mongoose");
+     passportLocalMongoose = require("passport-local-mongoose"),
+     GoogleStrategy = require("passport-google-oauth20").Strategy,
+     findOrCreate=require("mongoose-findorcreate");
+
 require('dotenv').config();
 var app=express();
 app.use(bodyParser.urlencoded({extended:true}));
@@ -23,20 +26,48 @@ mongoose.connect("mongodb://localhost:27017/userDB",{useNewUrlParser:true,useUni
 mongoose.set("useCreateIndex",true);
 var userSchema= new mongoose.Schema({
      email:String,
-     password:String
+     password:String,
+     googleId:String
 });
 userSchema.plugin(passportLocalMongoose);
-// userSchema.plugin(encrypt,{secret:process.env.SECRET,encryptedFields:["password"]});
+userSchema.plugin(findOrCreate);
 var User = new mongoose.model("User",userSchema);
 passport.use(User.createStrategy());
-passport.serializeUser(User.serializeUser());
-passport.deserializeUser(User.deserializeUser());
+passport.serializeUser(function(user, done) {
+     done(null, user.id);
+   });
+passport.deserializeUser(function(id, done) {
+     User.findById(id, function(err, user) {
+       done(err, user);
+     });
+   });
+passport.use(new GoogleStrategy({
+     clientID: process.env.CLIENT_ID,
+     clientSecret: process.env.CLIENT_SECRET,
+     callbackURL: "http://localhost:167/auth/google/secrets",
+     userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
+   },
+   function(accessToken, refreshToken, profile, cb) {
+     console.log(profile);
+     User.findOrCreate({ googleId: profile.id }, function (err, user) {
+       return cb(err, user);
+     });
+   }
+ ));
 //----------------------------------------------------------------------------------------------------------------
 
 
 app.get("/",function(req,res){
      res.render("home");
 });
+app.get('/auth/google',
+  passport.authenticate('google', { scope: ['profile'] }));
+app.get('/auth/google/secrets', 
+  passport.authenticate('google', { failureRedirect: '/login' }),
+  function(req, res) {
+    // Successful authentication, redirect to secrets.
+    res.redirect('/secrets');
+  });
 app.get("/login",function(req,res){
      res.render("login");
 });
@@ -51,10 +82,13 @@ app.get("/secrets",function(req,res){
           res.redirect("/login");
      }
 })
+//--------------------------------------------------Ending User's session on Logout------------------------------
 app.get("/logout",function(req,res){
      req.logout();
      res.redirect("/");
 });
+
+//---------------------------Registering new users-----------------------------------------------------------
 app.post("/register",function(req,res){
      User.register({username:req.body.username},req.body.password,function(err,user){
           if(err){
@@ -69,6 +103,8 @@ app.post("/register",function(req,res){
      })
    
 });
+
+//-----------------------------------------Login Existing Users---------------------------------------------
 app.post("/login",function(req,res){
      var user = new User({
           username:req.body.username,
@@ -81,5 +117,5 @@ app.post("/login",function(req,res){
           })
      });
 });
-     
+//----------------------------------------------------------------------------------------------------------------
 app.listen(167);
