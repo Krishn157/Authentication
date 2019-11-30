@@ -27,7 +27,8 @@ mongoose.set("useCreateIndex",true);
 var userSchema= new mongoose.Schema({
      email:String,
      password:String,
-     googleId:String
+     googleId:String,
+     secret:String
 });
 userSchema.plugin(passportLocalMongoose);
 userSchema.plugin(findOrCreate);
@@ -57,9 +58,33 @@ passport.use(new GoogleStrategy({
 //----------------------------------------------------------------------------------------------------------------
 
 
+
 app.get("/",function(req,res){
      res.render("home");
 });
+app.get("/submit",function(req,res){
+     if (req.isAuthenticated()){
+          res.render("submit");
+        }
+        else{
+             res.redirect("/login");
+        }
+});
+app.post("/submit",function(req,res){
+     var submittedSecret = req.body.secret;
+     User.findById(req.user.id , function(err,found){
+          if(err) throw err;
+          if(found){
+               found.secret=submittedSecret;
+               found.save(function(){
+                    res.redirect("/secrets");
+               });
+          }
+     });
+
+});
+
+//----------------------------------------Google Authorization---------------------------------
 app.get('/auth/google',
   passport.authenticate('google', { scope: ['profile'] }));
 app.get('/auth/google/secrets', 
@@ -68,6 +93,8 @@ app.get('/auth/google/secrets',
     // Successful authentication, redirect to secrets.
     res.redirect('/secrets');
   });
+//-----------------------------------------------------------------------------------------------
+
 app.get("/login",function(req,res){
      res.render("login");
 });
@@ -75,13 +102,14 @@ app.get("/register",function(req,res){
      res.render("register");
 });
 app.get("/secrets",function(req,res){
-     if (req.isAuthenticated()){
-       res.render("secrets");
-     }
-     else{
-          res.redirect("/login");
-     }
-})
+    User.find({"secret":{$ne: null}},function(err,found){
+         if(err) throw err;
+         if(found)
+         {
+              res.render("secrets",{usersWithSecrets:found});
+         }
+    });
+});
 //--------------------------------------------------Ending User's session on Logout------------------------------
 app.get("/logout",function(req,res){
      req.logout();
