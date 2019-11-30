@@ -1,8 +1,9 @@
 //jshint esversion:6
 var express=require("express"),
-     bodyParser = require("body-parser");
+     bodyParser = require("body-parser"),
+     md5=require("md5"),
      mongoose= require("mongoose");
-     encrypt=require("mongoose-encryption");
+     // encrypt=require("mongoose-encryption");
 require('dotenv').config();
 var app=express();
 app.use(bodyParser.urlencoded({extended:true}));
@@ -12,10 +13,8 @@ var userSchema= new mongoose.Schema({
      email:String,
      password:String
 });
-userSchema.plugin(encrypt,{secret:process.env.SECRET,encryptedFields:["password"]});
+// userSchema.plugin(encrypt,{secret:process.env.SECRET,encryptedFields:["password"]});
 var User = new mongoose.model("User",userSchema);
-
-
 app.get("/",function(req,res){
      res.render("home");
 });
@@ -28,7 +27,7 @@ app.get("/register",function(req,res){
 app.post("/register",function(req,res){
      var newUser = new User({
           email:req.body.username,
-          password:req.body.password
+          password:md5(req.body.password)
      });
      newUser.save(function(err){
           if (err) throw err;
@@ -37,7 +36,7 @@ app.post("/register",function(req,res){
 });
 app.post("/login",function(req,res){
      var username= req.body.username;
-     var password=req.body.password;
+     var password=md5(req.body.password);
      User.findOne({email:username},function(err,found){
           if(err) throw err;
           if(found)
